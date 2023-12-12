@@ -7,8 +7,8 @@ import (
 
 // Shared is a shared cache that implements RFC 9111.
 // The following features are not implemented
-// - Private cache
-// - Request directives
+// - Private cache.
+// - Request directives.
 type Shared struct {
 	understoodMethods                 []string
 	understoodStatusCodes             []int
@@ -42,10 +42,10 @@ func NewShared(opts ...SharedOption) (*Shared, error) {
 	return s, nil
 }
 
-func (c *Shared) Storable(req *http.Request, res *http.Response, now time.Time) (bool, time.Time) {
+func (s *Shared) Storable(req *http.Request, res *http.Response, now time.Time) (bool, time.Time) {
 	// 3. Storing Responses in Caches (https://www.rfc-editor.org/rfc/rfc9111#section-3)
 	// - the request method is understood by the cache;
-	if !contains(req.Method, c.understoodMethods) {
+	if !contains(req.Method, s.understoodMethods) {
 		return false, time.Time{}
 	}
 
@@ -59,13 +59,13 @@ func (c *Shared) Storable(req *http.Request, res *http.Response, now time.Time) 
 		return false, time.Time{}
 	}
 
-	rescc, _ := ParseResponseCacheControlHeader(res.Header.Values("Cache-Control"))
+	rescc, _ := ParseResponseCacheControlHeader(res.Header.Values("Cache-Control")) //nostyle:handlerrors
 
 	// - if the response status code is 206 or 304, or the must-understand cache directive (see https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.3) is present: the cache understands the response status code;
 	if contains(res.StatusCode, []int{
 		http.StatusPartialContent,
 		http.StatusNotModified,
-	}) || (rescc.MustUnderstand && !contains(res.StatusCode, c.understoodStatusCodes)) {
+	}) || (rescc.MustUnderstand && !contains(res.StatusCode, s.understoodStatusCodes)) {
 		return false, time.Time{}
 	}
 
@@ -115,7 +115,7 @@ func (c *Shared) Storable(req *http.Request, res *http.Response, now time.Time) 
 	// NOT IMPLEMENTED
 
 	//   * a status code that is defined as heuristically cacheable (see https://www.rfc-editor.org/rfc/rfc9111#section-4.2.2).
-	if contains(res.StatusCode, c.heuristicallyCacheableStatusCodes) {
+	if contains(res.StatusCode, s.heuristicallyCacheableStatusCodes) {
 		return true, expires
 	}
 

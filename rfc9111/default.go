@@ -86,7 +86,7 @@ var defaultUnderstoodStatusCodes = []int{
 
 // Responses with status codes that are defined as heuristically cacheable (e.g., 200, 203, 204, 206, 300, 301, 308, 404, 405, 410, 414, and 501 in this specification) can be reused by a cache with heuristic expiration unless otherwise indicated by the method definition or explicit cache controls [CACHING];
 // https://www.rfc-editor.org/rfc/rfc9110#section-15.1
-var defaultHeuristicallyCacheableStatusCodes = []int{
+var defaultHeuristicallyCacheableStatusCodes = []int{ //nostyle:varnames
 	http.StatusOK,                   // 200 / RFC 9110, 15.3.1
 	http.StatusNonAuthoritativeInfo, // 203 / RFC 9110, 15.3.4
 	http.StatusNoContent,            // 204 / RFC 9110, 15.3.5

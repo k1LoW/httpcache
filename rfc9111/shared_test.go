@@ -253,15 +253,15 @@ func TestShared_Storable(t *testing.T) {
 			t.Parallel()
 			s, err := NewShared()
 			if err != nil {
-				t.Errorf("Shared.Storable() error = %v", err)
+				t.Errorf("rfc9111.Shared.Storable() error = %v", err)
 				return
 			}
 			gotOK, gotExpires := s.Storable(tt.req, tt.res, now)
 			if gotOK != tt.wantOK {
-				t.Errorf("Shared.Storable() gotOK = %v, want %v", gotOK, tt.wantOK)
+				t.Errorf("rfc9111.Shared.Storable() gotOK = %v, want %v", gotOK, tt.wantOK)
 			}
 			if !gotExpires.Equal(tt.wantExpires) {
-				t.Errorf("Shared.Storable() gotExpires = %v, want %v", gotExpires, tt.wantExpires)
+				t.Errorf("rfc9111.Shared.Storable() gotExpires = %v, want %v", gotExpires, tt.wantExpires)
 			}
 		})
 	}
