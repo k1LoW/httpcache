@@ -1,0 +1,23 @@
+run:
+  go: 1.21
+  modules-download-mode: mod
+linters:
+  fast: false
+  enable:
+    - misspell
+    - gosec
+    - godot
+    - revive
+    - errorlint
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+  misspell:
+    locale: US
+    ignore-words: []
+  revive:
+    rules:
+      - name: unexported-return
+        disabled: true
+      - name: exported
+        disabled: false
