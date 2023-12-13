@@ -98,7 +98,7 @@ func (s *Shared) Storable(req *http.Request, res *http.Response, now time.Time) 
 	}
 
 	// - if the cache is shared: the Authorization header field is not present in the request (see https://www.rfc-editor.org/rfc/rfc9111#section-11.6.2 of [HTTP]) or a response directive is present that explicitly allows shared caching (see https://www.rfc-editor.org/rfc/rfc9111#section-3.5);
-	// In this specification, the following response directives have such an effect: must-revalidate (Section 5.2.2.2), public (Section 5.2.2.9), and s-maxage (Section 5.2.2.10).
+	// In this specification, the following response directives have such an effect: must-revalidate (https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.2), public (https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.9), and s-maxage (https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.10).
 	if req.Header.Get("Authorization") != "" && !rescc.MustRevalidate && !rescc.Public && rescc.SMaxAge == nil {
 		return false, time.Time{}
 	}
@@ -177,7 +177,7 @@ func (s *Shared) Handle(req *http.Request, cachedReq *http.Request, cachedRes *h
 		}
 	}
 
-	// - the stored response does not contain the no-cache directive (Section 5.2.2.4), unless it is successfully validated (Section 4.3), and
+	// - the stored response does not contain the no-cache directive (https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.4), unless it is successfully validated (https://www.rfc-editor.org/rfc/rfc9111#section-4.3), and
 	rescc, _ := ParseResponseCacheControlHeader(cachedRes.Header.Values("Cache-Control")) //nostyle:handlerrors
 
 	if rescc.NoCache {
@@ -197,7 +197,7 @@ func (s *Shared) Handle(req *http.Request, cachedReq *http.Request, cachedRes *h
 	if !rescc.NoCache && !rescc.MustRevalidate && rescc.SMaxAge == nil && !rescc.ProxyRevalidate {
 		//     > A cache MUST NOT generate a stale response if it is prohibited by an explicit in-protocol directive (e.g., by a no-cache response directive, a must-revalidate response directive, or an applicable s-maxage or proxy-revalidate response directive; see https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2).
 		reqcc, _ := ParseRequestCacheControlHeader(req.Header.Values("Cache-Control")) //nostyle:handlerrors
-		//     > A cache MUST NOT generate a stale response unless it is disconnected or doing so is explicitly permitted by the client or origin server (e.g., by the max-stale request directive in Section 5.2.1, extension directives such as those defined in [RFC5861], or configuration in accordance with an out-of-band contract).
+		//     > A cache MUST NOT generate a stale response unless it is disconnected or doing so is explicitly permitted by the client or origin server (e.g., by the max-stale request directive in https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1, extension directives such as those defined in [RFC5861], or configuration in accordance with an out-of-band contract).
 		if reqcc.MaxStale == nil {
 			// If no value is assigned to max-stale, then the client will accept a stale response of any age (ref https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.2).
 			return true, cachedRes, nil
@@ -233,16 +233,16 @@ func CalclateExpires(d *ResponseDirectives, header http.Header, heuristicExpirat
 	// 	4.2.1. Calculating Freshness Lifetime
 	// A cache can calculate the freshness lifetime (denoted as freshness_lifetime) of a response by evaluating the following rules and using the first match:
 
-	// - If the cache is shared and the s-maxage response directive (Section 5.2.2.10) is present, use its value, or
+	// - If the cache is shared and the s-maxage response directive (https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.10) is present, use its value, or
 	if d.SMaxAge != nil {
 		return now.Add(time.Duration(*d.SMaxAge) * time.Second)
 	}
-	// - If the max-age response directive (Section 5.2.2.1) is present, use its value, or
+	// - If the max-age response directive (https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.1) is present, use its value, or
 	if d.MaxAge != nil {
 		return now.Add(time.Duration(*d.MaxAge) * time.Second)
 	}
 	if header.Get("Expires") != "" {
-		// - If the Expires response header field (Section 5.3) is present, use its value minus the value of the Date response header field
+		// - If the Expires response header field (https://www.rfc-editor.org/rfc/rfc9111#section-5.3) is present, use its value minus the value of the Date response header field
 		et, err := http.ParseTime(header.Get("Expires"))
 		if err == nil {
 			if header.Get("Date") != "" {
