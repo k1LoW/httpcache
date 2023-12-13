@@ -256,15 +256,15 @@ func TestShared_Storable(t *testing.T) {
 			t.Parallel()
 			s, err := NewShared()
 			if err != nil {
-				t.Errorf("rfc9111.Shared.Storable() error = %v", err)
+				t.Errorf("Shared.Storable() error = %v", err)
 				return
 			}
 			gotOK, gotExpires := s.Storable(tt.req, tt.res, now)
 			if gotOK != tt.wantOK {
-				t.Errorf("rfc9111.Shared.Storable() gotOK = %v, want %v", gotOK, tt.wantOK)
+				t.Errorf("Shared.Storable() gotOK = %v, want %v", gotOK, tt.wantOK)
 			}
 			if !gotExpires.Equal(tt.wantExpires) {
-				t.Errorf("rfc9111.Shared.Storable() gotExpires = %v, want %v", gotExpires, tt.wantExpires)
+				t.Errorf("Shared.Storable() gotExpires = %v, want %v", gotExpires, tt.wantExpires)
 			}
 		})
 	}
@@ -640,19 +640,19 @@ func TestShared_Handle(t *testing.T) {
 			//t.Parallel()
 			s, err := NewShared()
 			if err != nil {
-				t.Errorf("rfc9111.Shared.Handle() error = %v", err)
+				t.Errorf("Shared.Handle() error = %v", err)
 				return
 			}
 			gotCacheUsed, gotRes, err := s.Handle(tt.req, tt.cachedReq, tt.cachedRes, tt.do, now)
 			if err != nil {
-				t.Errorf("rfc9111.Shared.Handle() error = %v", err)
+				t.Errorf("Shared.Handle() error = %v", err)
 				return
 			}
 			if gotCacheUsed != tt.wantCacheUsed {
-				t.Errorf("rfc9111.Shared.Handle() gotCacheUsed = %v, want %v", gotCacheUsed, tt.wantCacheUsed)
+				t.Errorf("Shared.Handle() gotCacheUsed = %v, want %v", gotCacheUsed, tt.wantCacheUsed)
 			}
 			if diff := cmp.Diff(gotRes, tt.wantRes); diff != "" {
-				t.Errorf("rfc9111.Shared.Handle() gotRes != tt.wantRes:\n%s", diff)
+				t.Errorf("Shared.Handle() gotRes != tt.wantRes:\n%s", diff)
 			}
 		})
 	}

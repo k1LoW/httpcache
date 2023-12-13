@@ -6,6 +6,10 @@ analyzers-settings:
     exclude:
       - urlstr
       - upstream
+  errorstrings:
+    exclude-test: true
+  handlerrors:
+    exclude-test: true
   ifacenames:
     all: true
   varnames:
