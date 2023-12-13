@@ -77,7 +77,7 @@ func (s *Shared) Storable(req *http.Request, res *http.Response, now time.Time) 
 		return false, time.Time{}
 	}
 
-	rescc, _ := ParseResponseCacheControlHeader(res.Header.Values("Cache-Control")) //nostyle:handlerrors
+	rescc := ParseResponseCacheControlHeader(res.Header.Values("Cache-Control"))
 
 	// - if the response status code is 206 or 304, or the must-understand cache directive (see https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.3) is present: the cache understands the response status code;
 	if contains(res.StatusCode, []int{
@@ -178,7 +178,7 @@ func (s *Shared) Handle(req *http.Request, cachedReq *http.Request, cachedRes *h
 	}
 
 	// - the stored response does not contain the no-cache directive (https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.4), unless it is successfully validated (https://www.rfc-editor.org/rfc/rfc9111#section-4.3), and
-	rescc, _ := ParseResponseCacheControlHeader(cachedRes.Header.Values("Cache-Control")) //nostyle:handlerrors
+	rescc := ParseResponseCacheControlHeader(cachedRes.Header.Values("Cache-Control"))
 
 	if rescc.NoCache {
 		res, err := do(req)
@@ -196,7 +196,7 @@ func (s *Shared) Handle(req *http.Request, cachedReq *http.Request, cachedRes *h
 	//   * allowed to be served stale (see https://www.rfc-editor.org/rfc/rfc9111#section-4.2.4), or
 	if !rescc.NoCache && !rescc.MustRevalidate && rescc.SMaxAge == nil && !rescc.ProxyRevalidate {
 		//     > A cache MUST NOT generate a stale response if it is prohibited by an explicit in-protocol directive (e.g., by a no-cache response directive, a must-revalidate response directive, or an applicable s-maxage or proxy-revalidate response directive; see https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2).
-		reqcc, _ := ParseRequestCacheControlHeader(req.Header.Values("Cache-Control")) //nostyle:handlerrors
+		reqcc := ParseRequestCacheControlHeader(req.Header.Values("Cache-Control"))
 		//     > A cache MUST NOT generate a stale response unless it is disconnected or doing so is explicitly permitted by the client or origin server (e.g., by the max-stale request directive in https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1, extension directives such as those defined in [RFC5861], or configuration in accordance with an out-of-band contract).
 		if reqcc.MaxStale == nil {
 			// If no value is assigned to max-stale, then the client will accept a stale response of any age (ref https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.2).

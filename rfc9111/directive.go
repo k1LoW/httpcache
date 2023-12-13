@@ -1,54 +1,53 @@
 package rfc9111
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 )
 
 type RequestDirectives struct {
-	// 5.2.1.1.  max-age
+	// max-age https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.1.
 	MaxAge *uint32
-	// 5.2.1.2.  max-stale
+	// max-stale https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.2.
 	MaxStale *uint32
-	// 5.2.1.3.  min-fresh
+	// min-fresh https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.3.
 	MinFresh *uint32
-	// 5.2.1.4.  no-cache
+	// no-cache https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.4.
 	NoCache bool
-	// 5.2.1.5.  no-store
+	// no-store https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.5.
 	NoStore bool
-	//5.2.1.6.  no-transform
+	// no-transform https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.6.
 	NoTransform bool
-	// 5.2.1.7.  only-if-cached
+	// only-if-cached https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.7.
 	OnlyIfCached bool
 }
 
 type ResponseDirectives struct {
-	// 5.2.2.1.  max-age
+	// max-age https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.1.
 	MaxAge *uint32
-	// 5.2.2.2.  must-revalidate
+	// must-revalidate https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.2.
 	MustRevalidate bool
-	// 5.2.2.3.  must-understand
+	// must-understand https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.3.
 	MustUnderstand bool
-	// 5.2.2.4.  no-cache
+	// no-cache https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.4.
 	NoCache bool
-	// 5.2.2.5.  no-store
+	// no-store https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.5.
 	NoStore bool
-	// 5.2.2.6.  no-transform
+	// no-transform https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.6.
 	NoTransform bool
-	// 5.2.2.7.  private
+	// private https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.7.
 	Private bool
-	// 5.2.2.8.  proxy-revalidate
+	// proxy-revalidate https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.8.
 	ProxyRevalidate bool
-	// 5.2.2.9.  public
+	// public https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.9.
 	Public bool
-	// 5.2.2.10. s-maxage
+	// s-maxag https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.10.
 	SMaxAge *uint32
 }
 
 // ParseRequestCacheControlHeader parses the Cache-Control header of a request.
-func ParseRequestCacheControlHeader(headers []string) (d *RequestDirectives, errs error) {
-	d = &RequestDirectives{}
+func ParseRequestCacheControlHeader(headers []string) *RequestDirectives {
+	d := &RequestDirectives{}
 	for _, h := range headers {
 		tokens := strings.Split(h, ",")
 		for _, t := range tokens {
@@ -59,7 +58,6 @@ func ParseRequestCacheControlHeader(headers []string) (d *RequestDirectives, err
 				sec := strings.TrimPrefix(t, "max-age=")
 				u64, err := strconv.ParseUint(sec, 10, 32)
 				if err != nil {
-					errs = errors.Join(errs, err)
 					continue
 				}
 				u32 := uint32(u64)
@@ -68,7 +66,6 @@ func ParseRequestCacheControlHeader(headers []string) (d *RequestDirectives, err
 				sec := strings.TrimPrefix(t, "max-stale=")
 				u64, err := strconv.ParseUint(sec, 10, 32)
 				if err != nil {
-					errs = errors.Join(errs, err)
 					continue
 				}
 				u32 := uint32(u64)
@@ -77,7 +74,6 @@ func ParseRequestCacheControlHeader(headers []string) (d *RequestDirectives, err
 				sec := strings.TrimPrefix(t, "min-fresh=")
 				u64, err := strconv.ParseUint(sec, 10, 32)
 				if err != nil {
-					errs = errors.Join(errs, err)
 					continue
 				}
 				u32 := uint32(u64)
@@ -95,12 +91,12 @@ func ParseRequestCacheControlHeader(headers []string) (d *RequestDirectives, err
 			}
 		}
 	}
-	return
+	return d
 }
 
 // ParseResponseCacheControlHeader parses the Cache-Control header of a response.
-func ParseResponseCacheControlHeader(headers []string) (d *ResponseDirectives, errs error) {
-	d = &ResponseDirectives{}
+func ParseResponseCacheControlHeader(headers []string) *ResponseDirectives {
+	d := &ResponseDirectives{}
 	for _, h := range headers {
 		tokens := strings.Split(h, ",")
 		for _, t := range tokens {
@@ -111,7 +107,6 @@ func ParseResponseCacheControlHeader(headers []string) (d *ResponseDirectives, e
 				sec := strings.TrimPrefix(t, "max-age=")
 				u64, err := strconv.ParseUint(sec, 10, 32)
 				if err != nil {
-					errs = errors.Join(errs, err)
 					continue
 				}
 				u32 := uint32(u64)
@@ -136,7 +131,6 @@ func ParseResponseCacheControlHeader(headers []string) (d *ResponseDirectives, e
 				sec := strings.TrimPrefix(t, "s-maxage=")
 				u64, err := strconv.ParseUint(sec, 10, 32)
 				if err != nil {
-					errs = errors.Join(errs, err)
 					continue
 				}
 				u32 := uint32(u64)
@@ -146,5 +140,5 @@ func ParseResponseCacheControlHeader(headers []string) (d *ResponseDirectives, e
 			}
 		}
 	}
-	return
+	return d
 }
