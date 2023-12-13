@@ -2,8 +2,13 @@ package rfc9111
 
 import (
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/k1LoW/httpcache"
 )
+
+var _ httpcache.Handler = (*Shared)(nil)
 
 // Shared is a shared cache that implements RFC 9111.
 // The following features are not implemented
@@ -42,6 +47,7 @@ func NewShared(opts ...SharedOption) (*Shared, error) {
 	return s, nil
 }
 
+// Storable returns true if the response is storable in the cache.
 func (s *Shared) Storable(req *http.Request, res *http.Response, now time.Time) (bool, time.Time) {
 	// 3. Storing Responses in Caches (https://www.rfc-editor.org/rfc/rfc9111#section-3)
 	// - the request method is understood by the cache;
@@ -122,6 +128,95 @@ func (s *Shared) Storable(req *http.Request, res *http.Response, now time.Time) 
 	return false, time.Time{}
 }
 
+func (s *Shared) Handle(req *http.Request, cachedReq *http.Request, cachedRes *http.Response, do func(*http.Request) (*http.Response, error), now time.Time) (bool, *http.Response, error) {
+	if cachedReq == nil || cachedRes == nil {
+		res, err := do(req)
+		return false, res, err
+	}
+
+	// 4. Constructing Responses from Caches
+	// When presented with a request, a cache MUST NOT reuse a stored response unless:
+
+	// - the presented target URI (Section 7.1 of [HTTP]) and that of the stored response match, and
+	if req.URL.String() != cachedReq.URL.String() {
+		res, err := do(req)
+		return false, res, err
+	}
+
+	// - the request method associated with the stored response allows it to be used for the presented request, and
+	if req.Method != cachedReq.Method { // FIXME: more strictly
+		res, err := do(req)
+		return false, res, err
+	}
+
+	// - request header fields nominated by the stored response (if any) match those presented (see https://www.rfc-editor.org/rfc/rfc9111#section-4.1)
+	if v := cachedRes.Header.Values("Vary"); len(v) != 0 {
+		vary := strings.Join(v, ",")
+		if strings.Contains(vary, "*") {
+			res, err := do(req)
+			return false, res, err
+		}
+		for _, h := range strings.Split(vary, ",") {
+			h = strings.TrimSpace(h)
+			if req.Header.Get(h) != cachedReq.Header.Get(h) { // FIXME: more strictly
+				res, err := do(req)
+				return false, res, err
+			}
+		}
+	}
+
+	// - the stored response does not contain the no-cache directive (Section 5.2.2.4), unless it is successfully validated (Section 4.3), and
+	rescc, _ := ParseResponseCacheControlHeader(cachedRes.Header.Values("Cache-Control")) //nostyle:handlerrors
+
+	if rescc.NoCache {
+		res, err := do(req)
+		return false, res, err
+	}
+
+	expires := CalclateExpires(rescc, cachedRes.Header, now)
+
+	// - the stored response is one of the following:
+	//   * fresh (see https://www.rfc-editor.org/rfc/rfc9111#section-4.2), or
+	if expires.Sub(now) > 0 {
+		return true, cachedRes, nil
+	}
+
+	//   * allowed to be served stale (see https://www.rfc-editor.org/rfc/rfc9111#section-4.2.4), or
+	if !rescc.NoCache && !rescc.MustRevalidate && rescc.SMaxAge == nil && !rescc.ProxyRevalidate {
+		//     > A cache MUST NOT generate a stale response if it is prohibited by an explicit in-protocol directive (e.g., by a no-cache response directive, a must-revalidate response directive, or an applicable s-maxage or proxy-revalidate response directive; see https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2).
+		reqcc, _ := ParseRequestCacheControlHeader(req.Header.Values("Cache-Control")) //nostyle:handlerrors
+		//     > A cache MUST NOT generate a stale response unless it is disconnected or doing so is explicitly permitted by the client or origin server (e.g., by the max-stale request directive in Section 5.2.1, extension directives such as those defined in [RFC5861], or configuration in accordance with an out-of-band contract).
+		if reqcc.MaxStale == nil {
+			// If no value is assigned to max-stale, then the client will accept a stale response of any age (ref https://www.rfc-editor.org/rfc/rfc9111#section-5.2.1.2).
+			return true, cachedRes, nil
+		}
+		if expires.Add(time.Duration(*reqcc.MaxStale)*time.Second).Sub(now) > 0 {
+			return true, cachedRes, nil
+		}
+	}
+
+	//   * successfully validated (see https://www.rfc-editor.org/rfc/rfc9111#section-4.3).
+	if req.Method == http.MethodGet || req.Method == http.MethodHead {
+		if cachedRes.Header.Get("ETag") != "" {
+			req.Header.Set("If-None-Match", cachedRes.Header.Get("ETag"))
+		}
+		if cachedRes.Header.Get("Last-Modified") != "" {
+			req.Header.Set("If-Modified-Since", cachedRes.Header.Get("Last-Modified"))
+		}
+		res, err := do(req)
+		if err != nil {
+			return false, res, err
+		}
+		if res.StatusCode == http.StatusNotModified {
+			return true, cachedRes, nil
+		}
+		return false, res, nil
+	}
+
+	res, err := do(req)
+	return false, res, err
+}
+
 func CalclateExpires(d *ResponseDirectives, header http.Header, now time.Time) time.Time {
 	// 	4.2.1. Calculating Freshness Lifetime
 	// A cache can calculate the freshness lifetime (denoted as freshness_lifetime) of a response by evaluating the following rules and using the first match:
@@ -157,7 +252,7 @@ func CalclateExpires(d *ResponseDirectives, header http.Header, now time.Time) t
 			if header.Get("Date") != "" {
 				dt, err := http.ParseTime(header.Get("Date"))
 				if err == nil {
-					return now.Add(dt.Sub(lt) / 10)
+					return dt.Add(dt.Sub(lt) / 10)
 				}
 			} else {
 				return now.Add(now.Sub(lt) / 10)

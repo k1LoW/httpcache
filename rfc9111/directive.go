@@ -72,7 +72,7 @@ func ParseRequestCacheControlHeader(headers []string) (d *RequestDirectives, err
 					continue
 				}
 				u32 := uint32(u64)
-				d.MaxAge = &u32
+				d.MaxStale = &u32
 			case strings.HasPrefix(t, "min-fresh=") && d.MinFresh == nil:
 				sec := strings.TrimPrefix(t, "min-fresh=")
 				u64, err := strconv.ParseUint(sec, 10, 32)

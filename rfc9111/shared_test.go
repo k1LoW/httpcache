@@ -2,8 +2,11 @@ package rfc9111
 
 import (
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestShared_Storable(t *testing.T) {
@@ -86,7 +89,7 @@ func TestShared_Storable(t *testing.T) {
 				},
 			},
 			true,
-			time.Date(2024, 12, 13, 14, 15, 17, 00, time.UTC),
+			time.Date(2024, 12, 13, 14, 15, 21, 00, time.UTC),
 		},
 		{
 			"GET 200 Last-Modified: 2024-12-13 14:15:06 -> +1s",
@@ -262,6 +265,394 @@ func TestShared_Storable(t *testing.T) {
 			}
 			if !gotExpires.Equal(tt.wantExpires) {
 				t.Errorf("rfc9111.Shared.Storable() gotExpires = %v, want %v", gotExpires, tt.wantExpires)
+			}
+		})
+	}
+}
+
+func TestShared_Handle(t *testing.T) {
+	// 2024-12-13 14:15:16
+	now := time.Date(2024, 12, 13, 14, 15, 16, 00, time.UTC)
+	fresh := now.Add(15 * time.Second)
+	stale := now.Add(-15 * time.Second)
+
+	endpoint, err := url.Parse("https://example.com/api/v1/path/to/resource")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := url.Parse("https://example.com/api/v2/path/to/resource")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	origin200res := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{},
+	}
+	origin304res := &http.Response{
+		StatusCode: http.StatusNotModified,
+		Header:     http.Header{},
+	}
+	do200 := func(req *http.Request) (*http.Response, error) {
+		return origin200res, nil
+	}
+	do304 := func(req *http.Request) (*http.Response, error) {
+		return origin304res, nil
+	}
+	tests := []struct {
+		name          string
+		req           *http.Request
+		cachedReq     *http.Request
+		cachedRes     *http.Response
+		do            func(req *http.Request) (*http.Response, error)
+		wantCacheUsed bool
+		wantRes       *http.Response
+	}{
+		{
+			"No cached request/response (nil)",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			nil,
+			nil,
+			do200,
+			false,
+			origin200res,
+		},
+		{
+			"Use origin response (defferent URL)",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Request{
+				URL:    other,
+				Method: http.MethodGet,
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{fresh.Format(http.TimeFormat)},
+				},
+			},
+			do200,
+			false,
+			origin200res,
+		},
+		{
+			"Use origin response (defferent method)",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodHead,
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{fresh.Format(http.TimeFormat)},
+				},
+			},
+			do200,
+			false,
+			origin200res,
+		},
+		{
+			"Use origin response (Vary: *)",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Vary":          []string{"*"},
+					"Last-Modified": []string{fresh.Format(http.TimeFormat)},
+				},
+			},
+			do200,
+			false,
+			origin200res,
+		},
+		{
+			"Use flesh cached response",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{fresh.Format(http.TimeFormat)},
+					"Date":          []string{fresh.Format(http.TimeFormat)},
+				},
+			},
+			do200,
+			true,
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{fresh.Format(http.TimeFormat)},
+					"Date":          []string{fresh.Format(http.TimeFormat)},
+				},
+			},
+		},
+		{
+			"Use stale cached response",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{stale.Format(http.TimeFormat)},
+					"Date":          []string{stale.Format(http.TimeFormat)},
+				},
+			},
+			do200,
+			true,
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{stale.Format(http.TimeFormat)},
+					"Date":          []string{stale.Format(http.TimeFormat)},
+				},
+			},
+		},
+		{
+			"Use origin response (Cache-Control: max-stale=10)",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{
+					"Cache-Control": []string{"max-stale=10"},
+				},
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{stale.Format(http.TimeFormat)},
+					"Date":          []string{stale.Format(http.TimeFormat)},
+				},
+			},
+			do200,
+			false,
+			origin200res,
+		},
+		{
+			"Use stale cached response (Cache-Control: max-stale=20)",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{
+					"Cache-Control": []string{"max-stale=20"},
+				},
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{stale.Format(http.TimeFormat)},
+					"Date":          []string{stale.Format(http.TimeFormat)},
+				},
+			},
+			do200,
+			true,
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{stale.Format(http.TimeFormat)},
+					"Date":          []string{stale.Format(http.TimeFormat)},
+				},
+			},
+		},
+		{
+			"Use flesh cached response (Vary: Content-Type, User-Agent)",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{
+					"User-Agent":   []string{"test"},
+					"Content-Type": []string{"application/json"},
+				},
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"User-Agent":   []string{"test"},
+				},
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{fresh.Format(http.TimeFormat)},
+					"Date":          []string{fresh.Format(http.TimeFormat)},
+					"Vary":          []string{"content-type, user-agent"},
+				},
+			},
+			do200,
+			true,
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{fresh.Format(http.TimeFormat)},
+					"Date":          []string{fresh.Format(http.TimeFormat)},
+					"Vary":          []string{"content-type, user-agent"},
+				},
+			},
+		},
+		{
+			"Use origin response (Vary: Content-Type, User-Agent)",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{
+					"User-Agent":   []string{"test2"},
+					"Content-Type": []string{"application/json"},
+				},
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"User-Agent":   []string{"test"},
+				},
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{fresh.Format(http.TimeFormat)},
+					"Vary":          []string{"content-type, user-agent"},
+				},
+			},
+			do200,
+			false,
+			origin200res,
+		},
+		{
+			"Use origin response (Cache-Control: no-cache)",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{},
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{},
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{fresh.Format(http.TimeFormat)},
+					"Cache-Control": []string{"no-cache"},
+				},
+			},
+			do200,
+			false,
+			origin200res,
+		},
+		{
+			"Validate and use origin response",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{},
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{},
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{stale.Format(http.TimeFormat)},
+					"Date":          []string{stale.Format(http.TimeFormat)},
+					"Cache-Control": []string{"must-revalidate"},
+				},
+			},
+			do200,
+			false,
+			origin200res,
+		},
+		{
+			"Validate and use cached response",
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{},
+			},
+			&http.Request{
+				URL:    endpoint,
+				Method: http.MethodGet,
+				Header: http.Header{},
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{stale.Format(http.TimeFormat)},
+					"Date":          []string{stale.Format(http.TimeFormat)},
+					"Cache-Control": []string{"must-revalidate"},
+				},
+			},
+			do304,
+			true,
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{stale.Format(http.TimeFormat)},
+					"Date":          []string{stale.Format(http.TimeFormat)},
+					"Cache-Control": []string{"must-revalidate"},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			//t.Parallel()
+			s, err := NewShared()
+			if err != nil {
+				t.Errorf("rfc9111.Shared.Handle() error = %v", err)
+				return
+			}
+			gotCacheUsed, gotRes, err := s.Handle(tt.req, tt.cachedReq, tt.cachedRes, tt.do, now)
+			if err != nil {
+				t.Errorf("rfc9111.Shared.Handle() error = %v", err)
+				return
+			}
+			if gotCacheUsed != tt.wantCacheUsed {
+				t.Errorf("rfc9111.Shared.Handle() gotCacheUsed = %v, want %v", gotCacheUsed, tt.wantCacheUsed)
+			}
+			if diff := cmp.Diff(gotRes, tt.wantRes); diff != "" {
+				t.Errorf("rfc9111.Shared.Handle() gotRes != tt.wantRes:\n%s", diff)
 			}
 		})
 	}
