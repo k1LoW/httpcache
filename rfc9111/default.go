@@ -104,3 +104,5 @@ var defaultHeuristicallyCacheableStatusCodes = []int{ //nostyle:varnames
 
 	http.StatusNotImplemented, // 501 / RFC 9110, 15.6.2
 }
+
+var defaultHeuristicExpirationRatio = 0.1

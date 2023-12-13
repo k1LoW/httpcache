@@ -657,3 +657,67 @@ func TestShared_Handle(t *testing.T) {
 		})
 	}
 }
+
+func TestShared_SharedOption(t *testing.T) {
+	now := time.Date(2024, 12, 13, 14, 15, 16, 00, time.UTC)
+
+	tests := []struct {
+		name        string
+		opts        []SharedOption
+		req         *http.Request
+		res         *http.Response
+		wantOK      bool
+		wantExpires time.Time
+	}{
+		{
+			"GET 200 Last-Modified: 2024-12-13 14:15:06 -> +1s",
+			[]SharedOption{},
+			&http.Request{
+				Method: http.MethodGet,
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{"Mon, 13 Dec 2024 14:15:06 GMT"},
+				},
+			},
+			true,
+			time.Date(2024, 12, 13, 14, 15, 17, 00, time.UTC),
+		},
+		{
+			"HeuristicExpirationRatio 0.5 GET 200 Last-Modified: 2024-12-13 14:15:06 -> +5s",
+			[]SharedOption{
+				HeuristicExpirationRatio(0.5),
+			},
+			&http.Request{
+				Method: http.MethodGet,
+			},
+			&http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Last-Modified": []string{"Mon, 13 Dec 2024 14:15:06 GMT"},
+				},
+			},
+			true,
+			time.Date(2024, 12, 13, 14, 15, 21, 00, time.UTC),
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s, err := NewShared(tt.opts...)
+			if err != nil {
+				t.Errorf("Shared.Storable() error = %v", err)
+				return
+			}
+			gotOK, gotExpires := s.Storable(tt.req, tt.res, now)
+			if gotOK != tt.wantOK {
+				t.Errorf("Shared.Storable() gotOK = %v, want %v", gotOK, tt.wantOK)
+			}
+			if !gotExpires.Equal(tt.wantExpires) {
+				t.Errorf("Shared.Storable() gotExpires = %v, want %v", gotExpires, tt.wantExpires)
+			}
+		})
+	}
+}

@@ -18,13 +18,25 @@ type Shared struct {
 	understoodMethods                 []string
 	understoodStatusCodes             []int
 	heuristicallyCacheableStatusCodes []int
+	heuristicExpirationRatio          float64
 }
 
+// SharedOption is an option for Shared.
 type SharedOption func(*Shared) error
+
+// HeuristicExpirationRatio sets the heuristic expiration ratio.
+func HeuristicExpirationRatio(ratio float64) SharedOption {
+	return func(s *Shared) error {
+		s.heuristicExpirationRatio = ratio
+		return nil
+	}
+}
 
 // NewShared returns a new Shared cache handler.
 func NewShared(opts ...SharedOption) (*Shared, error) {
-	s := &Shared{}
+	s := &Shared{
+		heuristicExpirationRatio: defaultHeuristicExpirationRatio,
+	}
 
 	um := make([]string, len(defaultUnderstoodMethods))
 	_ = copy(um, defaultUnderstoodMethods)
@@ -91,7 +103,7 @@ func (s *Shared) Storable(req *http.Request, res *http.Response, now time.Time) 
 		return false, time.Time{}
 	}
 
-	expires := CalclateExpires(rescc, res.Header, now)
+	expires := CalclateExpires(rescc, res.Header, s.heuristicExpirationRatio, now)
 	if expires.Sub(now) <= 0 {
 		return false, time.Time{}
 	}
@@ -173,7 +185,7 @@ func (s *Shared) Handle(req *http.Request, cachedReq *http.Request, cachedRes *h
 		return false, res, err
 	}
 
-	expires := CalclateExpires(rescc, cachedRes.Header, now)
+	expires := CalclateExpires(rescc, cachedRes.Header, s.heuristicExpirationRatio, now)
 
 	// - the stored response is one of the following:
 	//   * fresh (see https://www.rfc-editor.org/rfc/rfc9111#section-4.2), or
@@ -217,7 +229,7 @@ func (s *Shared) Handle(req *http.Request, cachedReq *http.Request, cachedRes *h
 	return false, res, err
 }
 
-func CalclateExpires(d *ResponseDirectives, header http.Header, now time.Time) time.Time {
+func CalclateExpires(d *ResponseDirectives, header http.Header, heuristicExpirationRatio float64, now time.Time) time.Time {
 	// 	4.2.1. Calculating Freshness Lifetime
 	// A cache can calculate the freshness lifetime (denoted as freshness_lifetime) of a response by evaluating the following rules and using the first match:
 
@@ -252,10 +264,10 @@ func CalclateExpires(d *ResponseDirectives, header http.Header, now time.Time) t
 			if header.Get("Date") != "" {
 				dt, err := http.ParseTime(header.Get("Date"))
 				if err == nil {
-					return dt.Add(dt.Sub(lt) / 10)
+					return dt.Add(time.Duration(float64(dt.Sub(lt)) * heuristicExpirationRatio))
 				}
 			} else {
-				return now.Add(now.Sub(lt) / 10)
+				return now.Add(time.Duration(float64(now.Sub(lt)) * heuristicExpirationRatio))
 			}
 		}
 	}
